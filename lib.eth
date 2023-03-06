@@ -1,0 +1,167 @@
+open 'std'
+open 'io'
+open 'os'
+
+
+let _run_dialog args =
+  print "> dialog args: {args}"
+  let fifo_name = "./dialog.fifo"
+  system "mkfifo {fifo_name}"
+
+  try
+    let child_pid = fork!
+    if child_pid == 0 then
+      let ret = system "dialog {join ' ' args} 2>{fifo_name}"
+      exit ret
+    else
+      let fifo = open_in fifo_name
+      let res =
+        do loop acc:[] =
+          if let `some line = read_line_of_opt fifo then
+            loop (line :: acc)
+          else
+            rev acc
+      let wait_ret, child_status = waitpid child_pid 0
+      system "rm {fifo_name}"
+      if child_status == 0 then
+        return `some res
+      else if child_status == 1 then
+        return false
+      else failure ()
+  with exn ->
+    system "rm {fifo_name}"
+    raise exn
+
+
+let _run_checklist {title, height, width, list_height, entries} =
+  let entries_text = entries | map $ fn {tag, item, status} ->
+    "'{tag}' '{item}' {'on' if status is true else 'off'}"
+  let ans = _run_dialog $ append [
+    "--checklist", "'{title}'", "{height}", "{width}", "{list_height}"
+  ] entries_text
+  if let `some lines = ans then
+    if let [line] = lines then
+      `some (line | split \\s+/)
+    else `some []
+  else false
+
+let _run_radiolist {title, height, width, list_height, entries} =
+  let entries_text = entries | map $ fn {tag, item, status} ->
+    "'{tag}' '{item}' {'on' if status is true else 'off'}"
+  let ans = _run_dialog $ append [
+    "--radiolist", "'{title}'", "{height}", "{width}", "{list_height}"
+  ] entries_text
+  if let `some lines = ans then
+    if let [line] = lines then
+      `some (line | split \\s+/)
+    else `some []
+  else false
+
+let _run_menu {title, height, width, menu_height, entries} =
+  let entries_text = entries | map $ fn {tag, item} -> "'{tag}' '{item}'"
+  let ans = _run_dialog $ append [
+    "--menu", "'{title}'", "{height}", "{width}", "{menu_height}"
+  ] entries_text
+  if let `some lines = ans then
+    if let [line] = lines then
+      `some (line | split \\s+/)
+    else `some []
+  else false
+
+let _run_dselect {height, width, filepath} =
+  let ans = _run_dialog ["--dselect", "'{filepath}'", "{height}", "{width}"]
+  if let `some lines = ans then
+    if let [line] = lines then
+      `some line
+    else `some ""
+  else false
+
+let _run_fselect {height, width, filepath} =
+  let ans = _run_dialog ["--fselect", "'{filepath}'", "{height}", "{width}"]
+  if let `some lines = ans then
+    if let [line] = lines then
+      `some line
+    else `some ""
+  else false
+
+
+
+let _get_terminal_size! =
+  (shell "tput lines" | to_number, shell "tput cols" | to_number)
+
+
+let pub checklist =
+  object {
+    name = "dialog-checklist"
+  , base = {title=' ', height=0, width=0, list_height=10, entries=[]}
+  , methods = {
+      run = _run_checklist
+    }
+  }
+
+let pub radiolist =
+  object {
+    name = "dialog-radiolist"
+  , base = {title=' ', height=0, width=0, list_height=10, entries=[]}
+  , methods = {
+      run = _run_radiolist
+    }
+  }
+
+let pub menu =
+  let height, width = _get_terminal_size!
+  object {
+    name = "dialog-menu"
+  , base = {title=' ', height=0, width=0, menu_height=10, entries=[]}
+  , methods = {
+      run = _run_menu
+    }
+  }
+
+let pub dselect =
+  object {
+    name = "dialog-dselect"
+  , base = {height=0, width=0, filepath='.'}
+  , methods = {
+      run = _run_dselect
+    }
+  }
+
+let pub fselect =
+  object {
+    name = "dialog-fselect"
+  , base = {height=0, width=0, filepath='.'}
+  , methods = {
+      run = _run_fselect
+    }
+  }
+
+
+
+let pub widget_factory =
+  let term_height, term_width = _get_terminal_size!
+  object {
+    name = "dialog-widget-factory"
+  , base = {title=' ', width=0, height=0}
+  , methods = {
+
+      make_checklist = fn {title, height, width} entries ->
+        let list_height = len entries
+        {checklist with title, height, width, list_height, entries}
+
+    , make_radiolist = fn {title, height, width} entries ->
+        let list_height = len entries
+        {radiolist with title, height, width, list_height, entries}
+
+    , make_menu = fn {title, height, width} entries ->
+        let menu_height = len entries
+        {menu with title, height, width, menu_height, entries}
+
+    , make_dselect = fn {height, width} filepath ->
+        {dselect with height, width, filepath}
+
+    , make_fselect = fn {height, width} filepath ->
+        {fselect with height, width, filepath}
+    }
+  }
+
