@@ -4,34 +4,33 @@ open 'os' in
 
 
 let _run_dialog args =
-  let fifo_name = "./dialog.fifo" in
-  system "mkfifo {fifo_name}";
+  let proxy_file_name = shell "mktemp" in
 
   let child_status, reslines =
     try
       let child_pid = fork! in
       if child_pid == 0 then
         let args_text = join ' ' args in
-        let ret = system "dialog {args_text} 2>{fifo_name}" in
+        let ret = system "dialog {args_text} 2>{proxy_file_name}" in
         exit ret
       else
-        let fifo = open_in fifo_name in
+        let proxy_file = open_in proxy_file_name in
+        let wait_ret, child_status = waitpid child_pid 0 in
         let reslines =
           let rec loop acc =
-            if let `some line = read_line_of_opt fifo then
+            if let `some line = read_line_of_opt proxy_file then
               loop (chomp line :: acc)
             else rev acc
           in loop []
         in
-        let wait_ret, child_status = waitpid child_pid 0 in
         (child_status, reslines)
     with exn -> (
-      system "rm {fifo_name}";
+      system "rm {proxy_file_name}";
       raise exn
     )
   in
 
-  system "rm {fifo_name}";
+  system "rm {proxy_file_name}";
   if child_status == 0 then
     return `some reslines
   else if child_status == 1 then
