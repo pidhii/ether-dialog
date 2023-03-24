@@ -1,0 +1,48 @@
+open 'std' in
+import 'io' in
+import 'os' in
+import './lib.eth' as dialog in
+
+
+let test! =
+  let dialog = {dialog.dialog with title = "test app"} in
+  let testEntries =
+    range (1 .. 9) |> map (i ->
+      { tag = "tag-{i}",
+        item = if even? i then "" else "Item#{i}",
+        status = false
+      }
+    )
+  in
+
+
+  let rec mainMenu! =
+    if let `some tag = dialog#menu "Tests" [
+        {tag = "checklist", item = "Test dialog#checklist."},
+        {tag = "radiolist", item = "Test dialog#radiolist."},
+        {tag = "dselect", item = "Test dialog#dselect."},
+        {tag = "fselect", item = "Test dialog#fselect."},
+      ]
+    then (
+      if tag eq "checklist" then
+        let ans = dialog#checklist "Checklist" testEntries in
+        dialog#msgbox "{ans}"
+      else if tag eq "radiolist" then
+        let ans = dialog#radiolist "Checklist" testEntries in
+        dialog#msgbox "{ans}"
+      else if tag eq "dselect" then
+        let ans = dialog#dselect "./" in
+        dialog#msgbox "{ans}"
+      else if tag eq "fselect" then
+        let ans = dialog#fselect "./" in
+        dialog#msgbox "{ans}"
+      else
+        dialog#msgbox "Test for '{tag}' is not implemented.";
+      mainMenu!
+    );
+    return nil
+  in
+  mainMenu!
+in
+
+test!
