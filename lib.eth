@@ -173,6 +173,20 @@ let pub dialog =
         if let `some _ = _run_dialog cmdlineargs then
           true
         else false
+      ,
+
+      inputbox = fn {title, height, width} init ->
+        let text = _format_text init in
+        let cmdlineargs = flatten [
+            [if title is not nil then "--title '{title}'"],
+            ["--inputbox '{text}' {height} {width}"],
+          ]
+        in
+        if let `some lines = _run_dialog cmdlineargs then
+          if let [line] = lines then
+            `some line
+          else `some ""
+        else false
     }
   }
 in

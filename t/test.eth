@@ -22,6 +22,7 @@ let test! =
         {tag = "radiolist", item = "Test dialog#radiolist."},
         {tag = "dselect", item = "Test dialog#dselect."},
         {tag = "fselect", item = "Test dialog#fselect."},
+        {tag = "inputbox", item = "Test dialog#inputbox."},
       ]
     then (
       if tag eq "checklist" then
@@ -35,6 +36,9 @@ let test! =
         dialog#msgbox "{ans}"
       else if tag eq "fselect" then
         let ans = dialog#fselect "./" in
+        dialog#msgbox "{ans}"
+      else if tag eq "inputbox" then
+        let ans = dialog#inputbox "asdfasdf" in
         dialog#msgbox "{ans}"
       else
         dialog#msgbox "Test for '{tag}' is not implemented.";
