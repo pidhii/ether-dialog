@@ -1,5 +1,4 @@
 
-let pub name = "dialog" in
-let pub main = "lib.eth" in
+let pub name = "dialog"
+let pub main = "lib.eth"
 
-{name, main}

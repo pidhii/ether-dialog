@@ -1,194 +1,185 @@
-open 'std' in
-open 'io' in
-open 'os' in
+open 'std'
+open 'io'
+open 'os'
 
 
-let _run_dialog args =
-  let proxy_file_name = shell "mktemp" in
+let _run_dialog(args) {
+  let proxy_file_name = shell("mktemp")
 
-  let child_status, reslines =
-    try
-      let child_pid = fork! in
-      if child_pid == 0 then
-        let args_text = join ' ' args in
-        let ret = system "dialog {args_text} 2>{proxy_file_name}" in
-        exit ret
-      else
-        let proxy_file = open_in proxy_file_name in
-        let wait_ret, child_status = waitpid child_pid 0 in
-        let reslines =
-          let rec loop acc =
-            if let `some line = read_line_of_opt proxy_file then
-              loop (chomp line :: acc)
-            else rev acc
-          in loop []
-        in
-        (child_status, reslines)
-    with exn -> (
-      system "rm {proxy_file_name}";
-      raise exn
-    )
-  in
+  let #(child_status, reslines) =
+    try {
+      let child_pid = fork()
+      if child_pid == 0 then {
+        let args_text = join(' ', args)
+        let ret = system("dialog {args_text} 2>{proxy_file_name}")
+        exit(ret)
+      }
+      else {
+        let proxy_file = open_in(proxy_file_name)
+        let #(wait_ret, child_status) = waitpid(child_pid, 0)
+        let reslines = {
+          let rec loop(acc) {
+            if let `some(line) = read_line_of_opt(proxy_file) then
+              loop(chomp(line) :: acc)
+            else rev(acc)
+          }
+          loop([])
+        }
+        #(child_status, reslines)
+      }
+    }
+    with exn -> {
+      system("rm {proxy_file_name}")
+      raise(exn)
+    }
 
-  system "rm {proxy_file_name}";
+  system("rm {proxy_file_name}")
   if child_status == 0 then
-    return `some reslines
+    return `some(reslines)
   else if child_status == 1 then
     return false
-  else failure nil
-in
+  else failure(nil)
+}
 
 
-let _format_text text =
-  list text
-  |> flat_map (ch -> if ch eq "'" then ["'", '"', "'", '"', "'"] else [ch])
+let _format_text(text) {
+  list(text)
+  |> flat_map(fn(ch) if ch eq "'" then ["'", '"', "'", '"', "'"] else [ch])
   |> cat
-in
+}
 
-let pub dialog =
-  object {
-    name = "dialog",
-    base = {title = nil, width = 0, height = 0},
-    methods = {
+let pub dialog = #{
+  title = nil
+  width = 0
+  height = 0
 
-      _checklist = fn {title, height, width} {text, entries} ->
-        let list_height = len entries in
-        -- command line arguments
-        let cmdlineargs = flatten [
-            [if title is not nil then "--title '{title}'"],
-            ["--checklist '{text}' {height} {width} {list_height}"],
-            (
-              entries | map $ fn {tag, item, status} ->
-                "'{tag}' '{item}' {if status is true then 'on' else 'off'}"
-            )
-          ]
-        in
-        -- run dialog
-        if let `some lines = _run_dialog cmdlineargs then
-          if let [line] = lines then
-            `some (line | split /\s+/)
-          else `some []
-        else false
-      ,
-
-      _radiolist = fn {title, height, width} {text, entries} ->
-        let list_height = len entries in
-        -- command line arguments
-        let cmdlineargs = flatten [
-            [if title is not nil then "--title '{title}'"],
-            ["--radiolist '{text}' {height} {width} {list_height}"],
-            (
-              entries | map $ fn {tag, item, status} ->
-                "'{tag}' '{item}' {if status is true then 'on' else 'off'}"
-            ),
-          ]
-        in
-        -- run dialog
-        if let `some lines = _run_dialog cmdlineargs then
-          if let [line] = lines then
-            `some line
-          else `some nil
-        else false
-      ,
-
-      _menu = fn {title, height, width} {text, entries} ->
-        let menu_height = len entries in
-        -- command line arguments
-        let cmdlineargs = flatten $ [
-            [if title is not nil then "--title '{title}'"],
-            ["--menu '{text}' {height} {width} {menu_height}"],
-            entries | map $ fn {tag, item} -> "'{tag}' '{item}'",
-          ]
-        in
-        -- run dialog
-        if let `some lines = _run_dialog cmdlineargs then
-          if let [line] = lines then
-            `some line
-          else `some nil
-        else false
-      ,
-      --   dialog#checklist (text: string?)?
-      --                    entries: [{tag: string?, item: string?, status: boolean?}]
-      checklist = fn self arg ->
-        if string? arg
-        then fn entries -> self#_checklist {text = arg, entries}
-        else self#_checklist {text = " ", entries = arg}
-      ,
-
-      --   dialog#radiolist (text: string?)?
-      --                    entries: [{tag: string?, item: string?, status: boolean?}]
-      radiolist = fn self arg ->
-        if string? arg
-        then fn entries -> self#_radiolist {text = arg, entries}
-        else self#_radiolist {text = " ", entries = arg}
-      ,
-
-      --   dialog#radiolist (text: string?)?
-      --                    entries: [{tag: string?, item: string?, status: boolean?}]
-      menu = fn self arg ->
-        if string? arg
-        then fn entries -> self#_menu {text = arg, entries}
-        else self#_menu {text = " ", entries = arg}
-      ,
-
-      dselect = fn {title, height, width} filepath ->
-        -- command line arguments
-        let cmdlineargs = flatten [
-            [if title is not nil then "--title '{title}'"],
-            ["--dselect '{filepath}' {height} {width}"],
-          ]
-        in
-        -- run dialog
-        if let `some lines = _run_dialog cmdlineargs then
-          if let [line] = lines then
-            `some line
-          else `some ""
-        else false
-      ,
-
-      fselect = fn {title, height, width} filepath ->
-        -- command line arguments
-        let cmdlineargs = flatten [
-            [if title is not nil then "--title '{title}'"],
-            ["--fselect '{filepath}' {height} {width}"],
-          ]
-        in
-        -- run dialog
-        if let `some lines = _run_dialog cmdlineargs then
-          if let [line] = lines then
-            `some line
-          else `some ""
-        else false
-      ,
-
-      msgbox = fn {title, height, width} text ->
-        let text = _format_text text in
-        -- command line arguments
-        let cmdlineargs = flatten [
-            [if title is not nil then "--title '{title}'"],
-            ["--msgbox '{text}' {height} {width}"],
-          ]
-        in
-        -- run dialog
-        if let `some _ = _run_dialog cmdlineargs then
-          true
-        else false
-      ,
-
-      inputbox = fn {title, height, width} init ->
-        let text = _format_text init in
-        let cmdlineargs = flatten [
-            [if title is not nil then "--title '{title}'"],
-            ["--inputbox '{text}' {height} {width}"],
-          ]
-        in
-        if let `some lines = _run_dialog cmdlineargs then
-          if let [line] = lines then
-            `some line
-          else `some ""
-        else false
-    }
+  _checklist(self, #{text, entries}) {
+    let list_height = len(entries)
+    -- command line arguments
+    let cmdlineargs = flatten([
+      [if self.title is not nil then "--title '{self.title}'"]
+      ["--checklist '{text}' {self.height} {self.width} {list_height}"]
+      entries |> map (fn (#{tag, item, status})
+        "'{tag}' '{item}' {if status is true then 'on' else 'off'}"
+      )
+    ])
+    -- run dialog
+    if let `some(lines) = _run_dialog(cmdlineargs) then
+      if let [line] = lines then
+        `some(line |> split( /\s+/))
+      else `some([])
+    else false
   }
-in
 
-nil
+  _radiolist(self, #{text, entries}) {
+    let list_height = len(entries)
+    -- command line arguments
+    let cmdlineargs = flatten([
+      [if self.title is not nil then "--title '{self.title}'"]
+      ["--radiolist '{text}' {self.height} {self.width} {list_height}"]
+      entries |> map (fn (#{tag, item, status})
+        "'{tag}' '{item}' {if status is true then 'on' else 'off'}"
+      )
+    ])
+    -- run dialog
+    if let `some(lines) = _run_dialog(cmdlineargs) then
+      if let [line] = lines then
+        `some(line)
+      else `some(nil)
+    else false
+  }
+
+  _menu(self, #{text, entries}) {
+    let menu_height = len(entries)
+    -- command line arguments
+    let cmdlineargs = flatten([
+      [if self.title is not nil then "--title '{self.title}'"]
+      ["--menu '{text}' {self.height} {self.width} {menu_height}"]
+      entries |> map (fn (#{tag, item}) "'{tag}' '{item}'")
+    ])
+    -- run dialog
+    if let `some(lines) = _run_dialog(cmdlineargs) then
+      if let [line] = lines then
+        `some(line)
+      else `some(nil)
+    else false
+  }
+  --   dialog#checklist (text: string?)?
+  --                    entries: [{tag: string?, item: string?, status: boolean?}]
+  checklist(self, arg) {
+    if string?(arg)
+    then fn (entries) self:_checklist(#{text = arg, entries})
+    else self:_checklist(#{text = " ", entries = arg})
+  }
+
+  --   dialog#radiolist (text: string?)?
+  --                    entries: [{tag: string?, item: string?, status: boolean?}]
+  radiolist(self, arg) {
+    if string?(arg)
+    then fn (entries) self:_radiolist(#{text = arg, entries})
+    else self:_radiolist(#{text = " ", entries = arg})
+  }
+
+  --   dialog#radiolist (text: string?)?
+  --                    entries: [{tag: string?, item: string?, status: boolean?}]
+  menu(self, arg) {
+    if string?(arg)
+    then fn (entries) self:_menu(#{text = arg, entries})
+    else self:_menu(#{text = " ", entries = arg})
+  }
+
+  dselect(self, filepath) {
+    -- command line arguments
+    let cmdlineargs = flatten([
+      [if self.title is not nil then "--title '{self.title}'"]
+      ["--dselect '{filepath}' {self.height} {self.width}"]
+    ])
+    -- run dialog
+    if let `some(lines) = _run_dialog(cmdlineargs) then
+      if let [line] = lines then
+        `some(line)
+      else `some("")
+    else false
+  }
+
+  fselect(self, filepath) {
+    -- command line arguments
+    let cmdlineargs = flatten([
+      [if self.title is not nil then "--title '{self.title}'"]
+      ["--fselect '{filepath}' {self.height} {self.width}"]
+    ])
+    -- run dialog
+    if let `some(lines) = _run_dialog(cmdlineargs) then
+      if let [line] = lines then
+        `some(line)
+      else `some("")
+    else false
+  }
+
+  msgbox(self, text) {
+    let text = _format_text(text)
+    -- command line arguments
+    let cmdlineargs = flatten([
+      [if self.title is not nil then "--title '{self.title}'"],
+      ["--msgbox '{text}' {self.height} {self.width}"],
+    ])
+    -- run dialog
+    if let `some(_) = _run_dialog(cmdlineargs) then
+      true
+    else false
+  }
+
+  inputbox(self, init) {
+    let text = _format_text(init)
+    let cmdlineargs = flatten([
+      [if self.title is not nil then "--title '{self.title}'"]
+      ["--inputbox '{text}' {self.height} {self.width}"]
+    ])
+    if let `some(lines) = _run_dialog(cmdlineargs) then
+      if let [line] = lines then
+        `some(line)
+      else `some("")
+    else false
+  }
+}
+
